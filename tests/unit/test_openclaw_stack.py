@@ -62,3 +62,82 @@ class TestAiAgentNetworking:
         template = _create_template()
         template.resource_count_is('AWS::Lightsail::Instance', 1)
         template.resource_count_is('AWS::Lightsail::StaticIp', 1)
+
+
+class TestSecurity:
+    def test_instance_has_firewall_rules(self):
+        template = _create_template()
+        template.has_resource_properties(
+            'AWS::Lightsail::Instance',
+            {
+                'Networking': Match.object_like(
+                    {
+                        'Ports': Match.array_with(
+                            [
+                                Match.object_like({'FromPort': 443, 'ToPort': 443, 'Protocol': 'tcp'}),
+                            ]
+                        ),
+                    }
+                ),
+            },
+        )
+
+    def test_firewall_includes_https(self):
+        template = _create_template()
+        template.has_resource_properties(
+            'AWS::Lightsail::Instance',
+            {
+                'Networking': Match.object_like(
+                    {
+                        'Ports': Match.array_with(
+                            [
+                                Match.object_like({'FromPort': 443, 'ToPort': 443}),
+                            ]
+                        ),
+                    }
+                ),
+            },
+        )
+
+    def test_firewall_includes_ssh(self):
+        template = _create_template()
+        template.has_resource_properties(
+            'AWS::Lightsail::Instance',
+            {
+                'Networking': Match.object_like(
+                    {
+                        'Ports': Match.array_with(
+                            [
+                                Match.object_like({'FromPort': 22, 'ToPort': 22}),
+                            ]
+                        ),
+                    }
+                ),
+            },
+        )
+
+    def test_no_unexpected_resource_types(self):
+        """Ensure only expected resource types are created."""
+        template = _create_template()
+        template.resource_count_is('AWS::Lightsail::Instance', 1)
+        template.resource_count_is('AWS::Lightsail::StaticIp', 1)
+        # Verify no other resource types snuck in
+        resources = template.to_json().get('Resources', {})
+        resource_types = {r['Type'] for r in resources.values()}
+        assert resource_types == {'AWS::Lightsail::Instance', 'AWS::Lightsail::StaticIp'}
+
+    def test_tags_are_applied(self):
+        app = cdk.App()
+        stack = OpenClawStack(app, 'TagTestStack', env=cdk.Environment(account='123456789012', region=REGION))
+        cdk.Tags.of(app).add('Project', 'OpenClaw')
+        template = Template.from_stack(stack)
+        template.has_resource_properties(
+            'AWS::Lightsail::Instance',
+            {
+                'Tags': Match.array_with(
+                    [
+                        Match.object_like({'Key': 'Project', 'Value': 'OpenClaw'}),
+                    ]
+                ),
+            },
+        )

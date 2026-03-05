@@ -27,7 +27,7 @@ class OpenClawStack(cdk.Stack):
             self,
             'DashboardUrl',
             value=cdk.Fn.join('', ['https://', ai_agent.static_ip.attr_ip_address, '/overview']),
-            description='OpenClaw dashboard URL. Pair your browser via SSH first: Lightsail console > Connect using SSH.',
+            description='OpenClaw dashboard URL (IP-based; configure a custom domain for valid HTTPS certificate). Pair your browser via SSH first.',
         )
 
         cdk.CfnOutput(

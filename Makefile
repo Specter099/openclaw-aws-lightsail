@@ -8,10 +8,12 @@ synth:
 	npx cdk synth
 
 deploy:
-	npx cdk deploy --require-approval broadening
+	npx cdk deploy --require-approval any-change
 
 destroy:
-	npx cdk destroy --force
+	@echo "This will DESTROY all OpenClaw infrastructure. Data will be lost."
+	@read -p "Type 'yes' to confirm: " confirm && [ "$$confirm" = "yes" ] || (echo "Aborted." && exit 1)
+	npx cdk destroy
 
 diff:
 	npx cdk diff
