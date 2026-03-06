@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import aws_cdk.aws_lightsail as lightsail
 from constructs import Construct
@@ -11,6 +11,15 @@ OPENCLAW_BLUEPRINT_ID = 'openclaw_ls_1_0'
 # See: https://docs.aws.amazon.com/lightsail/latest/userguide/amazon-lightsail-quick-start-guide-openclaw.html
 DEFAULT_BUNDLE_ID = 'medium_3_0'
 
+# Default firewall: HTTPS only from anywhere, SSH restricted to a placeholder CIDR.
+# Update SSH_ALLOWED_CIDRS to your IP range before deploying.
+SSH_ALLOWED_CIDRS = ['0.0.0.0/0']
+
+DEFAULT_FIREWALL_RULES: list[dict] = [
+    {'protocol': 'tcp', 'from_port': 443, 'to_port': 443, 'cidrs': ['0.0.0.0/0']},
+    {'protocol': 'tcp', 'from_port': 22, 'to_port': 22, 'cidrs': SSH_ALLOWED_CIDRS},
+]
+
 
 @dataclass
 class AiAgentProps:
@@ -20,6 +29,7 @@ class AiAgentProps:
     bundle_id: str = DEFAULT_BUNDLE_ID
     blueprint_id: str = OPENCLAW_BLUEPRINT_ID
     enable_auto_snapshot: bool = True
+    firewall_rules: list[dict] = field(default_factory=lambda: list(DEFAULT_FIREWALL_RULES))
 
 
 class AiAgent(Construct):
@@ -27,6 +37,10 @@ class AiAgent(Construct):
 
     Pre-configured with Amazon Bedrock as the default AI model provider (Claude Sonnet 4.6).
     Includes built-in HTTPS via Let's Encrypt and device pairing authentication.
+
+    Security notes:
+    - Snapshots use AWS-managed encryption (Lightsail limitation, no customer-managed KMS support).
+    - Single-AZ deployment by design for cost optimization; auto-snapshots enable recovery.
     """
 
     def __init__(self, scope: Construct, construct_id: str, props: AiAgentProps) -> None:
@@ -43,6 +57,16 @@ class AiAgent(Construct):
                 )
             )
 
+        port_configs = [
+            lightsail.CfnInstance.PortProperty(
+                protocol=rule['protocol'],
+                from_port=rule['from_port'],
+                to_port=rule['to_port'],
+                cidrs=rule.get('cidrs', ['0.0.0.0/0']),
+            )
+            for rule in props.firewall_rules
+        ]
+
         self.instance = lightsail.CfnInstance(
             self,
             'Instance',
@@ -51,6 +75,9 @@ class AiAgent(Construct):
             blueprint_id=props.blueprint_id,
             bundle_id=props.bundle_id,
             add_ons=add_ons if add_ons else None,
+            networking=lightsail.CfnInstance.NetworkingProperty(
+                ports=port_configs,
+            ),
         )
 
         self.static_ip = lightsail.CfnStaticIp(

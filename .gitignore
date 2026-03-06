@@ -4,5 +4,3 @@ cdk.out/
 __pycache__/
 *.egg-info/
 .pytest_cache/
-uv.lock
-package-lock.json
